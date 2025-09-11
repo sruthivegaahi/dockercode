@@ -32,7 +32,7 @@ const AdminDashboard = () => {
     formData.append("file", file);
 
     try {
-      const res = await api.post("/api/upload-users-excel", formData, {
+      const res = await api.post("/api/excel/upload-users-excel", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
       setUploadStatus(`✅ Uploaded ${res.data.users.length} users successfully.`);

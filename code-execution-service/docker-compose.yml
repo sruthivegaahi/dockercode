@@ -1,0 +1,37 @@
+
+services:
+  executor-python:
+    build:
+      context: ./          # Root of code-execution-service
+      dockerfile: ./docker/python/Dockerfile
+    container_name: executor-python
+    ports:
+      - "5001:5001"
+    restart: unless-stopped
+
+  executor-java:
+    build:
+      context: ./
+      dockerfile: ./docker/java/Dockerfile
+    container_name: executor-java
+    ports:
+      - "5002:5001"
+    restart: unless-stopped
+
+  executor-cpp:
+    build:
+      context: ./
+      dockerfile: ./docker/cpp/Dockerfile
+    container_name: executor-cpp
+    ports:
+      - "5003:5001"
+    restart: unless-stopped
+
+  executor-js:
+    build:
+      context: ./
+      dockerfile: ./docker/javascript/Dockerfile
+    container_name: executor-js
+    ports:
+      - "5004:5001"
+    restart: unless-stopped
