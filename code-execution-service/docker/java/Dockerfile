@@ -1,4 +1,11 @@
 FROM openjdk:17-slim
+
 WORKDIR /app
-# Keep the container alive and ready to execute code via Node.js executor
-CMD ["bash"]
+
+COPY ./src ./src
+
+# Example: compile Java source (adjust Main.java / classname)
+# RUN javac ./src/Main.java
+
+EXPOSE 5001
+CMD ["java", "-cp", "src", "Main"]
