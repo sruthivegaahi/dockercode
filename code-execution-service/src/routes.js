@@ -1,67 +1,75 @@
 const express = require("express");
-const fs = require("fs");
-const { v4: uuidv4 } = require("uuid");
-const path = require("path");
-const { runDocker, tempDir } = require("./executor");
+const { runCode } = require("./executor");
 
 const router = express.Router();
 
-// /run endpoint
+/**
+ * Run code against single input
+ */
 router.post("/run", async (req, res) => {
   try {
+    const { code, language, input = "" } = req.body;
+    if (!code || !language) {
+      return res.status(400).json({ error: "Missing code or language" });
+    }
+
+    const result = await runCode({ code, language, input });
+    res.status(result.error ? 400 : 200).json(result);
+  } catch (err) {
+    console.error("Run error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+/**
+ * Run code with custom input
+ */
+router.post("/run-custom", async (req, res) => {
+  try {
+    const { code, language, customInput = "" } = req.body;
+    if (!code || !language) {
+      return res.status(400).json({ error: "Missing code or language" });
+    }
+
+    const result = await runCode({ code, language, input: customInput });
+    res.status(result.error ? 400 : 200).json(result);
+  } catch (err) {
+    console.error("Run-custom error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+/**
+ * Submit code against multiple test cases
+ */
+router.post("/submit", async (req, res) => {
+  try {
     const { code, language, testCases = [] } = req.body;
-
-    const fileId = uuidv4();
-    const ext = { python: "py", javascript: "js", cpp: "cpp", java: "java" }[language];
-    if (!ext) return res.status(400).json({ error: "Unsupported language" });
-
-    const fileName = language === "java" ? "Main.java" : `${fileId}.${ext}`;
-    fs.writeFileSync(path.join(tempDir, fileName), code);
+    if (!code || !language) {
+      return res.status(400).json({ error: "Missing code or language" });
+    }
 
     const results = [];
     for (const tc of testCases) {
-      try {
-        const output = await runDocker(language, fileName, tc.input);
-        results.push({
-          input: tc.input,
-          expected: tc.expectedOutput,
-          actual: output,
-          status: output === String(tc.expectedOutput).trim() ? "pass" : "fail",
-        });
-      } catch (err) {
-        results.push({
-          input: tc.input,
-          expected: tc.expectedOutput,
-          actual: err,
-          status: "error",
-        });
-      }
+      const result = await runCode({ code, language, input: tc.input });
+
+      results.push({
+        input: tc.input,
+        expected: String(tc.expectedOutput).trim(),
+        actual: result.output ? result.output.trim() : "",
+        status:
+          result.output &&
+          result.output.trim() === String(tc.expectedOutput).trim()
+            ? "pass"
+            : "fail",
+        error: result.error || null,
+      });
     }
 
     res.json({ results });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Executor error" });
-  }
-});
-
-// /run-custom endpoint
-router.post("/run-custom", async (req, res) => {
-  try {
-    const { code, language, customInput = "" } = req.body;
-
-    const fileId = uuidv4();
-    const ext = { python: "py", javascript: "js", cpp: "cpp", java: "java" }[language];
-    if (!ext) return res.status(400).json({ output: "Unsupported language" });
-
-    const fileName = language === "java" ? "Main.java" : `${fileId}.${ext}`;
-    fs.writeFileSync(path.join(tempDir, fileName), code);
-
-    const output = await runDocker(language, fileName, customInput);
-    res.json({ output });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ output: "Executor error" });
+    console.error("Submit error:", err);
+    res.status(500).json({ error: "Server error" });
   }
 });
 

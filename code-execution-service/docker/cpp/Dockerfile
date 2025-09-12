@@ -1,15 +1,4 @@
-FROM node:18-bullseye
-
+FROM gcc:12.2.0
 WORKDIR /app
-
-# Copy package.json first to leverage cache
-COPY ./src/package*.json ./
-
-RUN npm install
-
-# Copy rest of the source code
-COPY ./src/ ./
-
-EXPOSE 5001
-
-CMD ["node", "app.js"]
+# Ensure any future code files can be compiled and run here
+CMD ["bash"]

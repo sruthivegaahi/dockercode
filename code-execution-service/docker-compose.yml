@@ -1,37 +1,48 @@
+version: "3.8"
 
 services:
-  executor-python:
-    build:
-      context: ./          # Root of code-execution-service
-      dockerfile: ./docker/python/Dockerfile
-    container_name: executor-python
+  # Node.js API server (handles run, run-custom, submit requests)
+  executor:
+    build: ./docker/javascript
+    container_name: code_executor
+    volumes:
+      - ./temp:/app/temp
+      - ./src:/app/src
     ports:
-      - "5001:5001"
-    restart: unless-stopped
+      - "5000:5000"
+    depends_on:
+      - python_executor
+      - java_executor
+      - cpp_executor
+    restart: always
 
-  executor-java:
-    build:
-      context: ./
-      dockerfile: ./docker/java/Dockerfile
-    container_name: executor-java
-    ports:
-      - "5002:5001"
-    restart: unless-stopped
+  # Python executor container (used by Node server to run Python code)
+  python_executor:
+    build: ./docker/python
+    container_name: python_executor
+    volumes:
+      - ./temp:/app/temp
+    command: tail -f /dev/null  # Keep container running
+    restart: always
 
-  executor-cpp:
-    build:
-      context: ./
-      dockerfile: ./docker/cpp/Dockerfile
-    container_name: executor-cpp
-    ports:
-      - "5003:5001"
-    restart: unless-stopped
+  # Java executor container
+  java_executor:
+    build: ./docker/java
+    container_name: java_executor
+    volumes:
+      - ./temp:/app/temp
+    command: tail -f /dev/null
+    restart: always
 
-  executor-js:
-    build:
-      context: ./
-      dockerfile: ./docker/javascript/Dockerfile
-    container_name: executor-js
-    ports:
-      - "5004:5001"
-    restart: unless-stopped
+  # C++ executor container
+  cpp_executor:
+    build: ./docker/cpp
+    container_name: cpp_executor
+    volumes:
+      - ./temp:/app/temp
+    command: tail -f /dev/null
+    restart: always
+
+networks:
+  default:
+    name: code_execution_net

@@ -1,38 +1,79 @@
-
-const { v4: uuidv4 } = require("uuid");
 const { exec } = require("child_process");
-const path = require("path");
 const fs = require("fs");
+const path = require("path");
+const { v4: uuidv4 } = require("uuid");
 
 const tempDir = path.join(__dirname, "..", "temp");
 if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
 
-// Helper to run Docker container
-const runDocker = (language, fileName, input = "") => {
-  return new Promise((resolve, reject) => {
-    const containerName = `executor-${uuidv4()}`;
-    const dockerImage = {
-      python: "code_executor_python",
-      javascript: "code_executor_node",
-      cpp: "code_executor_cpp",
-      java: "code_executor_java",
-    }[language];
+async function runCode({ code, language, input = "" }) {
+  const fileId = uuidv4();
+  let fileName, compileCmd, runCmd;
 
-    if (!dockerImage) return reject("Unsupported language");
+  try {
+    if (language === "python") {
+      fileName = `${fileId}.py`;
+      fs.writeFileSync(path.join(tempDir, fileName), code);
+      runCmd = `python3 ${fileName}`;
+    } else if (language === "javascript") {
+      fileName = `${fileId}.js`;
+      fs.writeFileSync(path.join(tempDir, fileName), code);
+      runCmd = `node ${fileName}`;
+    } else if (language === "cpp") {
+      fileName = `${fileId}.cpp`;
+      const exeFile = `${fileId}.out`;
+      fs.writeFileSync(path.join(tempDir, fileName), code);
+      compileCmd = `g++ ${fileName} -o ${exeFile}`;
+      runCmd = `./${exeFile}`;
+    } else if (language === "java") {
+      fileName = "Main.java";
+      fs.writeFileSync(path.join(tempDir, fileName), code);
+      compileCmd = `javac ${fileName}`;
+      runCmd = `java Main`;
+    } else {
+      return { error: "Unsupported language" };
+    }
 
-    const filePath = path.join(tempDir, fileName);
-    const cmd = `docker run --rm -i --name ${containerName} -v ${filePath}:/code/${fileName} ${dockerImage} ${fileName}`;
+    // Compile if needed
+    if (compileCmd) {
+      await new Promise((resolve, reject) => {
+        exec(compileCmd, { cwd: tempDir, timeout: 5000 }, (err, stdout, stderr) => {
+          if (err) return reject(stderr || err.message);
+          resolve();
+        });
+      });
+    }
 
-    const child = exec(cmd, { timeout: 5000 }, (err, stdout, stderr) => {
-      if (err) return reject(stderr || err.message);
-      resolve(stdout.trim());
+    // Run the code
+    const output = await new Promise((resolve, reject) => {
+      const child = exec(runCmd, { cwd: tempDir, timeout: 5000 }, (err, stdout, stderr) => {
+        if (err) return reject(stderr || err.message);
+        resolve(stdout.trim());
+      });
+
+      if (child.stdin) {
+        child.stdin.write(input);
+        child.stdin.end();
+      }
     });
 
-    if (child.stdin) {
-      child.stdin.write(input);
-      child.stdin.end();
-    }
-  });
-};
+    return { output };
+  } catch (err) {
+    return { error: err.toString() };
+  } finally {
+    // Clean up files
+    try {
+      if (fileName && fs.existsSync(path.join(tempDir, fileName))) fs.unlinkSync(path.join(tempDir, fileName));
+      if (language === "cpp") {
+        const exeFile = `${fileId}.out`;
+        if (fs.existsSync(path.join(tempDir, exeFile))) fs.unlinkSync(path.join(tempDir, exeFile));
+      }
+      if (language === "java") {
+        const classFile = "Main.class";
+        if (fs.existsSync(path.join(tempDir, classFile))) fs.unlinkSync(path.join(tempDir, classFile));
+      }
+    } catch {}
+  }
+}
 
-module.exports = { runDocker, tempDir };
+module.exports = { runCode };

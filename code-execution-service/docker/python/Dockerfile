@@ -1,4 +1,4 @@
 FROM python:3.11-slim
 WORKDIR /app
-COPY . /app
-CMD ["python3"]
+# Keep container alive for executing Python code
+CMD ["tail", "-f", "/dev/null"]
