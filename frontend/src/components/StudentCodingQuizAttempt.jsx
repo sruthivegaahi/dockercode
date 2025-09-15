@@ -202,7 +202,9 @@ const handleSubmit = async (auto = false) => {
       resResults.map((r) => ({
         input: r.input ?? "",
         expected: r.expected ?? r.expectedOutput ?? "",
-        actual: r.actual ?? "",
+actual: r.output ?? r.stdout ?? "", // read from backend's actual output
+
+        
         status: r.status ?? (r.error ? "error" : "fail"),
         error: r.error ?? null,
       }))

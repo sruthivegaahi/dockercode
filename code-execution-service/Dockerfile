@@ -1,20 +1,23 @@
 # Use Node.js base image
 FROM node:18-slim
 
+# Install Docker CLI
+RUN apt-get update && apt-get install -y docker.io && rm -rf /var/lib/apt/lists/*
+
 # Set working directory
 WORKDIR /app
 
 # Copy package.json and package-lock.json first
 COPY package*.json ./
 
-# Install all dependencies (production only can be used if all required packages are in dependencies)
+# Install dependencies
 RUN npm install
 
-# Copy the rest of the source code
+# Copy source
 COPY src ./src
 
-# Expose the port your app listens on
+# Expose port
 EXPOSE 5002
 
-# Start the service
+# Start service
 CMD ["node", "src/app.js"]

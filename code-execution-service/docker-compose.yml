@@ -1,23 +1,31 @@
 version: "3.9"
 
 services:
+  # Main Node.js server
   executor:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile   # Ensure this Dockerfile starts Node.js app
     container_name: executor
     volumes:
-      - ./temp:/app/temp
+      - ./:/app              # Mount full project
+      - ./temp:/app/temp     # Temp folder for code execution
+      - /var/run/docker.sock:/var/run/docker.sock   # 👈 allow Node.js to access Docker
     ports:
-      - "5002:5002"   # Only this container exposes a host port
+      - "5002:5002"
     restart: always
+    command: ["node", "src/app.js"]  # Start your Node.js server
 
+  # Python executor
   python_executor:
     build: ./docker/python
     container_name: python_executor
     volumes:
       - ./temp:/app/temp
-    command: tail -f /dev/null   # Keep container running
+    command: tail -f /dev/null
     restart: always
 
+  # Java executor
   java_executor:
     build: ./docker/java
     container_name: java_executor
@@ -26,6 +34,7 @@ services:
     command: tail -f /dev/null
     restart: always
 
+  # C++ executor
   cpp_executor:
     build: ./docker/cpp
     container_name: cpp_executor
