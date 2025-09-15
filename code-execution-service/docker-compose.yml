@@ -1,37 +1,35 @@
+version: "3.9"
 
 services:
-  executor-python:
-    build:
-      context: ./          # Root of code-execution-service
-      dockerfile: ./docker/python/Dockerfile
-    container_name: executor-python
+  executor:
+    build: .
+    container_name: executor
+    volumes:
+      - ./temp:/app/temp
     ports:
-      - "5001:5001"
-    restart: unless-stopped
+      - "5002:5002"   # Only this container exposes a host port
+    restart: always
 
-  executor-java:
-    build:
-      context: ./
-      dockerfile: ./docker/java/Dockerfile
-    container_name: executor-java
-    ports:
-      - "5002:5001"
-    restart: unless-stopped
+  python_executor:
+    build: ./docker/python
+    container_name: python_executor
+    volumes:
+      - ./temp:/app/temp
+    command: tail -f /dev/null   # Keep container running
+    restart: always
 
-  executor-cpp:
-    build:
-      context: ./
-      dockerfile: ./docker/cpp/Dockerfile
-    container_name: executor-cpp
-    ports:
-      - "5003:5001"
-    restart: unless-stopped
+  java_executor:
+    build: ./docker/java
+    container_name: java_executor
+    volumes:
+      - ./temp:/app/temp
+    command: tail -f /dev/null
+    restart: always
 
-  executor-js:
-    build:
-      context: ./
-      dockerfile: ./docker/javascript/Dockerfile
-    container_name: executor-js
-    ports:
-      - "5004:5001"
-    restart: unless-stopped
+  cpp_executor:
+    build: ./docker/cpp
+    container_name: cpp_executor
+    volumes:
+      - ./temp:/app/temp
+    command: tail -f /dev/null
+    restart: always

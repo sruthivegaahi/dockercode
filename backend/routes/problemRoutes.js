@@ -357,7 +357,7 @@ router.post("/run", authenticateToken, async (req, res) => {
     const { code, language, testCases = [] } = req.body;
 
     // Call Code Execution Service
-    const response = await axios.post("http://localhost:5000/run", {
+    const response = await axios.post("http://localhost:5002/api/run", {
       code,
       language,
       testCases
@@ -378,7 +378,7 @@ router.post("/run-custom", authenticateToken, async (req, res) => {
     const { code, language, customInput = "" } = req.body;
 
     // Call Code Execution Service
-    const response = await axios.post("http://localhost:5000/run-custom", {
+    const response = await axios.post("http://localhost:5002/api/run-custom", {
       code,
       language,
       customInput
@@ -408,7 +408,7 @@ router.post("/submit", authenticateToken, authorizeRoles("student"), async (req,
     const testCases = problem.testCases || [];
 
     // Call Code Execution Service to run all test cases
-    const execResponse = await axios.post("http://localhost:5000/run", {
+    const execResponse = await axios.post("http://localhost:5002/api/run", {
       code,
       language,
       testCases

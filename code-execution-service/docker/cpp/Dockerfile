@@ -1,3 +1,4 @@
 FROM gcc:12.2.0
 WORKDIR /app
-CMD ["g++", "--version"]
+# Ensure any future code files can be compiled and run here
+CMD ["bash"]
