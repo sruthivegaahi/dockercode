@@ -32,10 +32,17 @@ function runCode(language, code, input, callback) {
       break;
 
     case "java":
-    fileName = `Main.java`; 
+      fileName = `Main.java`;
       container = "java_executor";
       compileCmd = `javac /app/temp/${fileName}`;
-        runCmd = `java -cp /app/temp Main`;
+      runCmd = `java -cp /app/temp Main`;
+      break;
+
+    case "javascript":
+    case "js":
+      fileName = `${fileId}.js`;
+      container = "js_executor";
+      runCmd = `node /app/temp/${fileName}`;
       break;
 
     default:

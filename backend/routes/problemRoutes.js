@@ -361,7 +361,7 @@ router.post("/run", authenticateToken, async (req, res) => {
       code,
       language,
       testCases
-    }, { timeout: 10000 });
+    }, { timeout: 50000 });
 
     res.json(response.data);
   } catch (err) {
@@ -382,7 +382,7 @@ router.post("/run-custom", authenticateToken, async (req, res) => {
       code,
       language,
       customInput
-    }, { timeout: 10000 });
+    }, { timeout: 50000 });
 
     res.json(response.data);
   } catch (err) {

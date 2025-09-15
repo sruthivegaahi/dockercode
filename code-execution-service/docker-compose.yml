@@ -5,16 +5,16 @@ services:
   executor:
     build:
       context: .
-      dockerfile: Dockerfile   # Ensure this Dockerfile starts Node.js app
+      dockerfile: Dockerfile   # Starts the Node.js app
     container_name: executor
     volumes:
       - ./:/app              # Mount full project
       - ./temp:/app/temp     # Temp folder for code execution
-      - /var/run/docker.sock:/var/run/docker.sock   # 👈 allow Node.js to access Docker
+      - /var/run/docker.sock:/var/run/docker.sock   # Allow access to Docker
     ports:
       - "5002:5002"
     restart: always
-    command: ["node", "src/app.js"]  # Start your Node.js server
+    command: ["node", "src/app.js"]
 
   # Python executor
   python_executor:
@@ -38,6 +38,15 @@ services:
   cpp_executor:
     build: ./docker/cpp
     container_name: cpp_executor
+    volumes:
+      - ./temp:/app/temp
+    command: tail -f /dev/null
+    restart: always
+
+  # JavaScript executor
+  js_executor:
+    build: ./docker/javascript
+    container_name: js_executor
     volumes:
       - ./temp:/app/temp
     command: tail -f /dev/null

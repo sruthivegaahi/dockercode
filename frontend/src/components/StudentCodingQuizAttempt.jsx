@@ -156,7 +156,8 @@ export default function StudentCodingQuizAttempt() {
         (res.data.results || []).map((r) => ({
           input: r.input ?? "",
           expected: r.expected ?? r.expectedOutput ?? "",
-          actual: r.actual ?? "",
+        actual: r.output ?? r.stdout ?? "",
+
           status: r.status ?? (r.error ? "error" : "fail"),
           error: r.error ?? null,
         }))
