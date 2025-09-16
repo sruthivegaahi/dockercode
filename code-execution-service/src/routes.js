@@ -65,9 +65,16 @@ function runCode(language, code, input, callback) {
     let output = "";
     let error = "";
 
-    if (input) {
-      child.stdin.write(input);
-    }
+  if (input) {
+  // Allow both comma and newline separated input
+  let formattedInput = input
+    .replace(/,/g, "\n") // convert commas to newlines
+    .trim();
+
+  child.stdin.write(formattedInput + "\n");
+}
+
+
     child.stdin.end();
 
     child.stdout.on("data", (data) => (output += data.toString()));

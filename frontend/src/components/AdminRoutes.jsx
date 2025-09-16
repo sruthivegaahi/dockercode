@@ -9,6 +9,7 @@ import AdminQuizList from './AdminQuizList';
 import AdminQuizEdit from './AdminQuizEdit';
 import AdminQuizResult from './AdminQuizResult';
 import CodingQuestionManager from './CodingQuestionManager';
+import ResultsList from './ResultsList';
 const AdminRoutes = () => {
   return (
  
@@ -22,7 +23,7 @@ const AdminRoutes = () => {
   <Route path="/upload-excel" element={<AdminUploadExcel />} />
   <Route path="quizzes/:quizId/results" element={<AdminQuizResult />} />
   <Route path="/coding-questions" element={<CodingQuestionManager />} />
-
+ <Route path="results" element={<ResultsList />}/>
 </Routes>
  
   );

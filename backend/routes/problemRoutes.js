@@ -116,56 +116,58 @@ router.put("/:id", async (req, res) => {
 });
 
 // Assign Problem to College/Branch
-router.post("/assign", async (req, res) => {
-  try {
-    let { id, quizId, collegeName, branch } = req.body;
-    const targetId = id || quizId; // accept either key
+// Assign Problem to College/Branch
+// Assign Problem to College/Branch
+router.post(
+  "/assign",
+  authenticateToken,
+  authorizeRoles("admin"), // only admins can assign
+  async (req, res) => {
+    try {
+      let { id, quizId, collegeName, branch } = req.body;
+      const targetId = id || quizId; // accept either key
 
-    // Validate required fields
-    if (!targetId || !collegeName || !branch) {
-      return res.status(400).json({ error: "Missing required fields, quizType is required" });
+      if (!targetId || !collegeName || !branch) {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+
+      collegeName = collegeName.trim();
+      branch = branch.trim();
+
+      const problem = await Problem.findById(targetId);
+      if (!problem) {
+        return res.status(404).json({ error: "Problem not found" });
+      }
+
+      if (!problem.assignedTargets) problem.assignedTargets = [];
+
+      const alreadyAssigned = problem.assignedTargets.some(
+        ({ collegeName: c, branch: b }) =>
+          (c || "").trim().toLowerCase() === collegeName.toLowerCase() &&
+          (b || "").trim().toLowerCase() === branch.toLowerCase()
+      );
+
+      if (alreadyAssigned) {
+        return res.status(200).json({
+          message: "Already assigned",
+          assignedTargets: problem.assignedTargets,
+        });
+      }
+
+      problem.assignedTargets.push({ collegeName, branch });
+      await problem.save();
+
+      res.status(201).json({
+        message: "Problem assigned successfully",
+        assignedTargets: problem.assignedTargets,
+      });
+    } catch (err) {
+      console.error("❌ Error assigning problem:", err);
+      res.status(500).json({ error: err.message });
     }
-
-    // Trim and normalize inputs safely
-    collegeName = collegeName ? collegeName.trim() : "";
-    branch = branch ? branch.trim() : "";
-   
-
-    if (!collegeName || !branch) {
-      return res.status(400).json({ error: "College, branch, and quizType cannot be empty" });
-    }
-
-    const problem = await Problem.findById(targetId);
-    if (!problem) {
-      return res.status(404).json({ error: "Problem not found" });
-    }
-
-
-    if (!problem.assignedTargets) problem.assignedTargets = [];
-
-    // Prevent duplicate assignment (case-insensitive)
-    const alreadyAssigned = problem.assignedTargets.some(
-      ({ collegeName: c, branch: b }) => 
-        (c || "").trim().toLowerCase() === collegeName.toLowerCase() &&
-        (b || "").trim().toLowerCase() === branch.toLowerCase()
-    );
-
-    if (alreadyAssigned) {
-      return res
-        .status(400)
-        .json({ error: "Problem already assigned to this college and branch" });
-    }
-
-    // Assign the problem
-    problem.assignedTargets.push({ collegeName, branch });
-    await problem.save();
-
-    res.json({ message: "Problem assigned successfully", assignedTargets: problem.assignedTargets });
-  } catch (err) {
-    console.error("❌ Error assigning problem:", err);
-    res.status(500).json({ error: err.message });
   }
-});
+);
+
 
 // Get All Coding Quizzes
 router.get("/quizzes/coding", authenticateToken, async (req, res) => {

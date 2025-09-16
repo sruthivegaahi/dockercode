@@ -40,35 +40,51 @@ router.get('/distinct', async (req, res) => {
     res.status(500).json({ message: "Server error while fetching distinct values" });
   }
 });
-router.post('/assign', authenticateToken, async (req, res) => {
-  const { quizId, collegeName, branch } = req.body;
+router.post(
+  '/assign',
+  authenticateToken,
+  authorizeRoles('admin'), // ✅ Use middleware instead of manual role check
+  async (req, res) => {
+    try {
+      let { quizId, collegeName, branch } = req.body;
 
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({ message: 'Forbidden' });
-  }
+      if (!quizId || !collegeName || !branch) {
+        return res.status(400).json({ message: 'Missing required fields' });
+      }
 
+      collegeName = collegeName.trim();
+      branch = branch.trim();
 
-  try {
-    const quiz = await Quiz.findById(quizId);
-    if (!quiz) return res.status(404).json({ message: 'Quiz not found' });
+      const quiz = await Quiz.findById(quizId);
+      if (!quiz) return res.status(404).json({ message: 'Quiz not found' });
 
-    // Check if provided quizType matches the quiz's type
-   
-    const alreadyAssigned = quiz.assignedTargets.some(
-      (target) => target.collegeName === collegeName && target.branch === branch
-    );
+      // Check if already assigned
+      const alreadyAssigned = quiz.assignedTargets.some(
+        (target) =>
+          (target.collegeName || '').trim().toLowerCase() === collegeName.toLowerCase() &&
+          (target.branch || '').trim().toLowerCase() === branch.toLowerCase()
+      );
 
-    if (!alreadyAssigned) {
+      if (alreadyAssigned) {
+        return res.status(200).json({
+          message: 'Quiz already assigned to this college/branch',
+          assignedTargets: quiz.assignedTargets,
+        });
+      }
+
       quiz.assignedTargets.push({ collegeName, branch });
       await quiz.save();
-    }
 
-    res.json({ message: 'Quiz assigned successfully', assignedTargets: quiz.assignedTargets });
-  } catch (err) {
-    console.error('Error assigning quiz:', err);
-    res.status(500).json({ message: 'Server error' });
+      res.status(201).json({
+        message: 'Quiz assigned successfully',
+        assignedTargets: quiz.assignedTargets,
+      });
+    } catch (err) {
+      console.error('Error assigning quiz:', err);
+      res.status(500).json({ message: 'Server error' });
+    }
   }
-});
+);
 
 
 router.get('/', async (req, res) => {

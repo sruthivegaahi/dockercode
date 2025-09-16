@@ -8,6 +8,7 @@ const AdminDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [uploadStatus, setUploadStatus] = useState("");
+  const [showResults, setShowResults] = useState(false); // <-- new state
   const navigate = useNavigate();
 
   // Fetch quizzes from backend
@@ -50,6 +51,9 @@ const AdminDashboard = () => {
       console.error(err);
     }
   };
+
+  if (loading) return <p className="text-center mt-10">Loading...</p>;
+  if (error) return <p className="text-center mt-10 text-red-500">{error}</p>;
 
   return (
     <div className="min-h-screen bg-gray-50 py-10 px-4">
@@ -107,16 +111,13 @@ const AdminDashboard = () => {
             Create Quiz
           </Link>
 
-          {/* Display quizzes with result links */}
-          {quizzes.map((quiz) => (
-            <Link
-              key={quiz._id}
-              to={`/admin/quizzes/${quiz._id}/results`}
-              className="bg-indigo-600 text-white px-6 py-3 rounded-lg text-sm font-medium hover:bg-indigo-700 transition duration-200 shadow-md text-center"
-            >
-              View Results: {quiz.title}
-            </Link>
-          ))}
+         {/* View Results Button */}
+<button
+  className="bg-indigo-600 text-white px-6 py-3 rounded-lg text-sm font-medium hover:bg-indigo-700 transition duration-200 shadow-md text-center"
+  onClick={() => navigate("/admin/results")} // navigate to results list page
+>
+  View Results
+</button>
 
           <Link
             to="/admin/quizzes"

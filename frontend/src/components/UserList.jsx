@@ -7,7 +7,7 @@ const UserList = () => {
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
-  const usersPerPage = 10;
+  const usersPerPage = 100;
 
   // Search state
   const [searchTerm, setSearchTerm] = useState('');

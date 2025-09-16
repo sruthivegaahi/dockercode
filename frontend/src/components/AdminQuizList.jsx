@@ -94,38 +94,49 @@ const AdminQuizList = () => {
     setSelectedBranch("");
     setShowAssignModal(true);
   };
+ const assignItem = async () => {
+  if (!selectedCollege || !selectedBranch) {
+    return alert("Please select both college and branch.");
+  }
 
-  const assignItem = async () => {
-    if (!selectedCollege || !selectedBranch) {
-      return alert("Please select both college and branch.");
-    }
+  try {
+    // Determine the backend URL based on type
+    const url = assignType === "quiz" ? "/api/quizzes/assign" : "/api/problems/assign";
 
-    try {
-      let url = "";
-      if (assignType === "quiz") {
-        url = "/api/quizzes/assign";
-      } else if (assignType === "coding") {
-        url = "/api/problems/assign";
-      }
+    // Send request to backend
+    const res = await api.post(url, {
+      quizId: assignType === "quiz" ? selectedId : undefined,
+      id: assignType === "coding" ? selectedId : undefined,
+      collegeName: selectedCollege,
+      branch: selectedBranch,
+    });
 
-      const res = await api.post(url, {
-          quizId: selectedId,
-        collegeName: selectedCollege,
-        branch: selectedBranch,
-      });
+    const assignedList = res.data.assignedTargets; // Backend sends updated assigned list
 
-      console.log("✅ Success:", res.data);
-      
-      setShowAssignModal(false);
-      fetchInitialData();
-      alert("Assigned successfully!");
-      
-    } catch (err) {
-      alert(
-        "Failed to assign: " + (err.response?.data?.message || err.message)
+    // Update the UI state based on the item type
+    if (assignType === "quiz") {
+      setQuizzes((prev) =>
+        prev.map((quiz) =>
+          quiz._id === selectedId ? { ...quiz, assigned: assignedList } : quiz
+        )
+      );
+    } else {
+      setCodingQuestions((prev) =>
+        prev.map((q) =>
+          q._id === selectedId ? { ...q, assigned: assignedList } : q
+        )
       );
     }
-  };
+
+    setShowAssignModal(false);
+
+    // Show proper message based on backend response
+    alert(res.data.message || "Assigned successfully!");
+  } catch (err) {
+    alert("Failed to assign: " + (err.response?.data?.message || err.message));
+  }
+};
+
 
   const openEditModal = (problem) => {
     // ensure testCases exist

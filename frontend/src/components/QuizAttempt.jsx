@@ -313,7 +313,8 @@ const wrongAnswers = totalQuestions - correctAnswers - unanswered;
         <div key={idx} className="mb-10 p-6 rounded-2xl shadow-xl border border-pink-200 bg-gradient-to-br from-purple-50 to-pink-50">
           <div className="flex text-xl font-semibold text-purple-900 mb-6 font-mono">
             <div className="mr-2">{idx + 1}.</div>
-            <div className="whitespace-pre-wrap">{q.questionText || q.question}</div>
+            <div className="whitespace-pre-line break-all">{q.questionText || q.question}</div>
+
           </div>
           {q.type === 'fill_blank' ? (
             <input
@@ -422,7 +423,10 @@ const wrongAnswers = totalQuestions - correctAnswers - unanswered;
 
           {reviewData.map((q, idx) => (
             <div key={idx} className="mb-6 p-4 border rounded-lg bg-purple-50">
-              <p className="font-semibold text-purple-900">{idx + 1}. {q.question}</p>
+             <p className="font-semibold text-purple-900 whitespace-pre-line break-words">
+  {idx + 1}. {q.question}
+</p>
+
               {q.type === 'mcq' && (
                 <ul className="list-disc ml-6 mt-2">
                   {q.options.map((opt, optIdx) => {
