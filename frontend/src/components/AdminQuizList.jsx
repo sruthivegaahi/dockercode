@@ -1,6 +1,14 @@
 import React, { useEffect, useState } from "react";
 import api from "./api";
 import { Link } from "react-router-dom";
+// Convert ISO date → datetime-local format (YYYY-MM-DDTHH:mm)
+const toLocalInputValue = (isoString) => {
+  if (!isoString) return "";
+  const date = new Date(isoString);
+  const tzOffset = date.getTimezoneOffset() * 60000; // ms
+  return new Date(date - tzOffset).toISOString().slice(0, 16);
+};
+
 
 const AdminQuizList = () => {
   const [quizzes, setQuizzes] = useState([]);
@@ -15,7 +23,8 @@ const AdminQuizList = () => {
   const [assignType, setAssignType] = useState(""); // "quiz" or "coding"
   const [selectedId, setSelectedId] = useState(null);
   const [selectedCollege, setSelectedCollege] = useState("");
-  const [selectedBranch, setSelectedBranch] = useState("");
+ const [selectedBranches, setSelectedBranches] = useState([]); // ✅ array instead of single branch
+
 
   // Edit modal state for coding problems
   const [showEditModal, setShowEditModal] = useState(false);
@@ -53,10 +62,10 @@ const AdminQuizList = () => {
         .filter((b) => b.college === selectedCollege)
         .map((b) => b.branch);
       setFilteredBranches(filtered);
-      setSelectedBranch("");
+      setSelectedBranches("");
     } else {
       setFilteredBranches([]);
-      setSelectedBranch("");
+      setSelectedBranches("");
     }
   }, [selectedCollege, allBranches]);
 
@@ -91,29 +100,27 @@ const AdminQuizList = () => {
     setSelectedId(id);
     setAssignType(type); // "quiz" or "coding"
     setSelectedCollege("");
-    setSelectedBranch("");
+    setSelectedBranches("");
     setShowAssignModal(true);
   };
  const assignItem = async () => {
-  if (!selectedCollege || !selectedBranch) {
-    return alert("Please select both college and branch.");
+  if (!selectedCollege || selectedBranches.length === 0) {
+    return alert("Please select a college and at least one branch.");
   }
 
   try {
-    // Determine the backend URL based on type
-    const url = assignType === "quiz" ? "/api/quizzes/assign" : "/api/problems/assign";
+    const url =
+      assignType === "quiz" ? "/api/quizzes/assign" : "/api/problems/assign";
 
-    // Send request to backend
     const res = await api.post(url, {
       quizId: assignType === "quiz" ? selectedId : undefined,
       id: assignType === "coding" ? selectedId : undefined,
       collegeName: selectedCollege,
-      branch: selectedBranch,
+      branches: selectedBranches, // ✅ send array to backend
     });
 
-    const assignedList = res.data.assignedTargets; // Backend sends updated assigned list
+    const assignedList = res.data.assignedTargets;
 
-    // Update the UI state based on the item type
     if (assignType === "quiz") {
       setQuizzes((prev) =>
         prev.map((quiz) =>
@@ -129,13 +136,12 @@ const AdminQuizList = () => {
     }
 
     setShowAssignModal(false);
-
-    // Show proper message based on backend response
     alert(res.data.message || "Assigned successfully!");
   } catch (err) {
     alert("Failed to assign: " + (err.response?.data?.message || err.message));
   }
 };
+
 
 
   const openEditModal = (problem) => {
@@ -217,6 +223,7 @@ const AdminQuizList = () => {
                 <th className="px-8 py-4 text-left text-lg font-semibold text-indigo-700">
                   Title
                 </th>
+                  <th className="px-8 py-4 text-left text-lg font-semibold text-indigo-700">Quiz Type</th>
                 <th className="px-8 py-4 text-center text-lg font-semibold text-indigo-700">
                   Actions
                 </th>
@@ -231,6 +238,7 @@ const AdminQuizList = () => {
                   <td className="px-8 py-5 text-indigo-900 font-semibold text-xl">
                     {quiz.title}
                   </td>
+                   <td className="px-8 py-5 text-indigo-900 text-lg">{quiz.quizType || "Not Set"}</td>
                   <td className="px-8 py-5 text-center space-x-3">
                     <Link
                       to={`/admin/quizzes/${quiz._id}/edit`}
@@ -280,6 +288,7 @@ const AdminQuizList = () => {
                 <th className="px-8 py-4 text-left text-lg font-semibold text-indigo-700">
                   Difficulty
                 </th>
+                 <th className="px-8 py-4 text-left text-lg font-semibold text-indigo-700">Quiz Type</th>
                 <th className="px-8 py-4 text-center text-lg font-semibold text-indigo-700">
                   Actions
                 </th>
@@ -294,7 +303,9 @@ const AdminQuizList = () => {
                   <td className="px-8 py-5 text-indigo-900 font-semibold text-xl">
                     {q.title}
                   </td>
+                 
                   <td className="px-8 py-5">{q.difficulty}</td>
+                   <td className="px-8 py-5 text-indigo-900 text-lg">{q.quizType || "Not Set"}</td>
                   <td className="px-8 py-5 text-center space-x-3">
                     <button
                       onClick={() => openEditModal(q)}
@@ -348,24 +359,34 @@ const AdminQuizList = () => {
               </select>
             </div>
 
-            <div className="mb-6">
-              <label className="block text-indigo-700 font-semibold mb-2">
-                Select Branch
-              </label>
-              <select
-                className="w-full border rounded p-2"
-                value={selectedBranch}
-                onChange={(e) => setSelectedBranch(e.target.value)}
-                disabled={!selectedCollege}
-              >
-                <option value="">-- Select Branch --</option>
-                {filteredBranches.map((branch, index) => (
-                  <option key={index} value={branch}>
-                    {branch}
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div className="mb-6">
+  <label className="block text-indigo-700 font-semibold mb-2">
+    Select Branches
+  </label>
+  <div className="grid grid-cols-2 gap-2">
+    {filteredBranches.map((branch, index) => (
+      <label key={index} className="inline-flex items-center space-x-2">
+        <input
+          type="checkbox"
+          value={branch}
+          checked={selectedBranches.includes(branch)}
+          onChange={(e) => {
+            if (e.target.checked) {
+              setSelectedBranches([...selectedBranches, branch]);
+            } else {
+              setSelectedBranches(
+                selectedBranches.filter((b) => b !== branch)
+              );
+            }
+          }}
+          className="h-4 w-4 text-indigo-600"
+        />
+        <span>{branch}</span>
+      </label>
+    ))}
+  </div>
+</div>
+
 
             <div className="flex justify-end space-x-4">
               <button
@@ -434,6 +455,33 @@ const AdminQuizList = () => {
                 <option value="Hard">Hard</option>
               </select>
             </div>
+<div className="mb-4">
+  <label className="block text-indigo-700 font-semibold mb-2">
+    Start Time
+  </label>
+  <input
+    type="datetime-local"
+    name="startTime"
+    value={toLocalInputValue(editProblem.startTime)}
+    onChange={handleEditChange}
+    className="w-full border rounded p-2"
+  />
+</div>
+
+<div className="mb-4">
+  <label className="block text-indigo-700 font-semibold mb-2">
+    End Time
+  </label>
+  <input
+    type="datetime-local"
+    name="endTime"
+    value={toLocalInputValue(editProblem.endTime)}
+    onChange={handleEditChange}
+    className="w-full border rounded p-2"
+  />
+</div>
+
+
 
             {/* Test Cases Section */}
             <div className="mb-6">

@@ -7,7 +7,8 @@ const emptyQuestion = () => ({
   text: "",
   options: ["", "", "", ""],
   correctOptionIndex: 0,
-  correctAnswerText: "", 
+  correctAnswerText: "",
+  codingProblem: "", // for coding type
 });
 
 const AdminQuizEdit = () => {
@@ -18,10 +19,41 @@ const AdminQuizEdit = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [questions, setQuestions] = useState([]);
+  const [startTime, setStartTime] = useState("");
+  const [endTime, setEndTime] = useState("");
+  const [problems, setProblems] = useState([]); // list of coding problems
 
   useEffect(() => {
     fetchQuiz();
+    fetchProblems();
   }, [id]);
+
+  const fetchProblems = async () => {
+    try {
+      const res = await api.get("/api/problems");
+      setProblems(res.data || []);
+    } catch (err) {
+      console.error("Failed to fetch problems", err);
+    }
+  };
+
+  // ✅ Correctly convert UTC to local datetime for input
+  const toLocalDatetime = (utcDate) => {
+    if (!utcDate) return "";
+    const d = new Date(utcDate);
+    const pad = (n) => (n < 10 ? "0" + n : n);
+    const year = d.getFullYear();
+    const month = pad(d.getMonth() + 1);
+    const day = pad(d.getDate());
+    const hours = pad(d.getHours());
+    const minutes = pad(d.getMinutes());
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  };
+
+  const toUTC = (localDate) => {
+    if (!localDate) return null;
+    return new Date(localDate).toISOString();
+  };
 
   const fetchQuiz = async () => {
     try {
@@ -29,12 +61,18 @@ const AdminQuizEdit = () => {
       const res = await api.get(`/api/quizzes/${id}`);
       setQuiz(res.data);
 
+      setStartTime(toLocalDatetime(res.data.startTime));
+      setEndTime(toLocalDatetime(res.data.endTime));
+
       const transformedQs = (res.data.questions || []).map((q) => ({
         type: q.type,
         text: q.questionText,
         options: q.type === "mcq" ? q.options || ["", "", "", ""] : [],
-        correctOptionIndex: typeof q.correctAnswer === "number" ? q.correctAnswer : 0,
-        correctAnswerText: typeof q.correctAnswer === "string" ? q.correctAnswer : "",
+        correctOptionIndex:
+          typeof q.correctAnswer === "number" ? q.correctAnswer : 0,
+        correctAnswerText:
+          typeof q.correctAnswer === "string" ? q.correctAnswer : "",
+        codingProblem: q.type === "coding" ? q.codingProblem || "" : "",
       }));
 
       setQuestions(transformedQs);
@@ -53,18 +91,19 @@ const AdminQuizEdit = () => {
       if (newType === "mcq") {
         updated[index].options = ["", "", "", ""];
         updated[index].correctOptionIndex = 0;
-      } else {
+      } else if (newType === "fill_blank") {
         updated[index].options = [];
         updated[index].correctAnswerText = "";
+      } else if (newType === "coding") {
+        updated[index].options = [];
+        updated[index].codingProblem = "";
       }
 
       return updated;
     });
   };
 
-  const addQuestion = () => {
-    setQuestions((prev) => [...prev, emptyQuestion()]);
-  };
+  const addQuestion = () => setQuestions((prev) => [...prev, emptyQuestion()]);
 
   const deleteQuestion = (index) => {
     if (!window.confirm("Delete this question?")) return;
@@ -103,10 +142,18 @@ const AdminQuizEdit = () => {
     });
   };
 
+  const updateCodingProblem = (index, problemId) => {
+    setQuestions((prev) => {
+      const updated = [...prev];
+      updated[index].codingProblem = problemId;
+      return updated;
+    });
+  };
+
   const saveQuestions = async () => {
     for (let i = 0; i < questions.length; i++) {
       const q = questions[i];
-      if (!q.text.trim()) {
+      if (!q.text.trim() && q.type !== "coding") {
         alert(`Question ${i + 1} text cannot be empty`);
         return;
       }
@@ -118,38 +165,50 @@ const AdminQuizEdit = () => {
         }
       } else if (q.type === "fill_blank") {
         if (!q.correctAnswerText.trim()) {
-          alert(`Correct answer in fill-in-the-blank question ${i + 1} cannot be empty`);
+          alert(
+            `Correct answer in fill-in-the-blank question ${i + 1} cannot be empty`
+          );
+          return;
+        }
+      } else if (q.type === "coding") {
+        if (!q.codingProblem) {
+          alert(`Please select a coding problem for question ${i + 1}`);
           return;
         }
       }
     }
 
-    const formatted = questions.map((q) => {
-      return {
-        type: q.type,
-        questionText: q.text,
-        ...(q.type === "mcq"
-          ? {
-              options: q.options,
-              correctAnswer: q.correctOptionIndex,
-            }
-          : {
-              correctAnswer: q.correctAnswerText,
-            }),
-      };
-    });
+    if (
+      (quiz.quizType === "Grand Test" || quiz.quizType === "Assignment") &&
+      (!startTime || !endTime)
+    ) {
+      alert("Start time and End time must be set!");
+      return;
+    }
+
+    const formatted = questions.map((q) => ({
+      type: q.type,
+      questionText: q.text,
+      ...(q.type === "mcq"
+        ? { options: q.options, correctAnswer: q.correctOptionIndex }
+        : q.type === "fill_blank"
+        ? { correctAnswer: q.correctAnswerText }
+        : { codingProblem: q.codingProblem }),
+    }));
 
     try {
       await api.put(`/api/quizzes/${id}`, {
         title: quiz.title,
         description: quiz.description,
+        startTime: quiz.quizType === "Practice Test" ? null : toUTC(startTime),
+        endTime: quiz.quizType === "Practice Test" ? null : toUTC(endTime),
         questions: formatted,
       });
-      alert("Questions saved successfully!");
+      alert("Quiz updated successfully!");
       navigate("/admin/quizzes");
     } catch (err) {
       console.error(err.response?.data || err.message);
-      alert("Failed to save questions");
+      alert("Failed to save quiz");
     }
   };
 
@@ -158,13 +217,41 @@ const AdminQuizEdit = () => {
 
   return (
     <div className="max-w-5xl mx-auto p-6 bg-white rounded-xl shadow-lg">
-      <h2 className="text-3xl font-bold mb-6 text-center">Edit Quiz: {quiz.title}</h2>
+      <h2 className="text-3xl font-bold mb-6 text-center">
+        Edit Quiz: {quiz.title}
+      </h2>
+
+      {(quiz.quizType === "Grand Test" || quiz.quizType === "Assignment") && (
+        <div className="mb-8 border p-5 rounded-lg bg-gray-50 shadow-sm">
+          <label className="block mb-2 font-medium">Start Time</label>
+          <input
+            type="datetime-local"
+            value={startTime}
+            onChange={(e) => setStartTime(e.target.value)}
+            className="w-full p-2 border rounded mb-4"
+          />
+
+          <label className="block mb-2 font-medium">End Time</label>
+          <input
+            type="datetime-local"
+            value={endTime}
+            onChange={(e) => setEndTime(e.target.value)}
+            className="w-full p-2 border rounded"
+          />
+        </div>
+      )}
 
       {questions.map((q, i) => (
-        <div key={i} className="border p-5 rounded-lg mb-6 bg-gray-50 shadow-sm">
+        <div
+          key={i}
+          className="border p-5 rounded-lg mb-6 bg-gray-50 shadow-sm"
+        >
           <div className="flex justify-between items-center mb-3">
             <h3 className="text-xl font-semibold">Question {i + 1}</h3>
-            <button onClick={() => deleteQuestion(i)} className="text-red-500 font-semibold">
+            <button
+              onClick={() => deleteQuestion(i)}
+              className="text-red-500 font-semibold"
+            >
               Delete
             </button>
           </div>
@@ -177,17 +264,22 @@ const AdminQuizEdit = () => {
           >
             <option value="mcq">Multiple Choice</option>
             <option value="fill_blank">Fill in the Blank</option>
+            <option value="coding">Coding</option>
           </select>
 
-          <label className="block mb-2 font-medium">Question Text</label>
-          <textarea
-            value={q.text}
-            onChange={(e) => updateQuestionText(i, e.target.value)}
-            className="w-full p-2 mb-4 border rounded"
-            rows={3}
-          />
+          {q.type !== "coding" && (
+            <>
+              <label className="block mb-2 font-medium">Question Text</label>
+              <textarea
+                value={q.text}
+                onChange={(e) => updateQuestionText(i, e.target.value)}
+                className="w-full p-2 mb-4 border rounded"
+                rows={3}
+              />
+            </>
+          )}
 
-          {q.type === "mcq" ? (
+          {q.type === "mcq" && (
             <>
               <label className="block mb-2 font-medium">Options</label>
               {q.options.map((opt, idx) => (
@@ -207,7 +299,9 @@ const AdminQuizEdit = () => {
                 </div>
               ))}
             </>
-          ) : (
+          )}
+
+          {q.type === "fill_blank" && (
             <>
               <label className="block mb-2 font-medium">Correct Answer</label>
               <input
@@ -216,6 +310,26 @@ const AdminQuizEdit = () => {
                 onChange={(e) => updateCorrectAnswerText(i, e.target.value)}
                 className="w-full p-2 border rounded"
               />
+            </>
+          )}
+
+          {q.type === "coding" && (
+            <>
+              <label className="block mb-2 font-medium">
+                Select Coding Problem
+              </label>
+              <select
+                value={q.codingProblem}
+                onChange={(e) => updateCodingProblem(i, e.target.value)}
+                className="w-full p-2 border rounded"
+              >
+                <option value="">-- Select Problem --</option>
+                {problems.map((p) => (
+                  <option key={p._id} value={p._id}>
+                    {p.title}
+                  </option>
+                ))}
+              </select>
             </>
           )}
         </div>
@@ -232,7 +346,7 @@ const AdminQuizEdit = () => {
           onClick={saveQuestions}
           className="px-6 py-3 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700"
         >
-          Save Questions
+          Save Quiz
         </button>
       </div>
     </div>

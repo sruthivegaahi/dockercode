@@ -37,6 +37,20 @@ export default function QuizList() {
     fetchData();
   }, []);
 
+  // ✅ Helper function to go fullscreen
+  const enterFullScreen = () => {
+    const el = document.documentElement;
+    if (el.requestFullscreen) {
+      el.requestFullscreen();
+    } else if (el.mozRequestFullScreen) { // Firefox
+      el.mozRequestFullScreen();
+    } else if (el.webkitRequestFullscreen) { // Chrome, Safari, Opera
+      el.webkitRequestFullscreen();
+    } else if (el.msRequestFullscreen) { // IE/Edge
+      el.msRequestFullscreen();
+    }
+  };
+
   if (loading) return <div className="p-4 text-center">Loading quizzes...</div>;
 
   return (
@@ -70,6 +84,7 @@ export default function QuizList() {
               {canRetake ? (
                 <Link
                   to={`/quizzes/${quiz._id}/take`}
+                  onClick={enterFullScreen}  // ✅ fullscreen trigger
                   className="mt-3 inline-block bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
                 >
                   Take Quiz

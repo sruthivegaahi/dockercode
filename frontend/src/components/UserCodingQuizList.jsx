@@ -24,7 +24,7 @@ export default function UserCodingQuizList() {
 
     fetchAssignedCodingProblems();
 
-    // Update current time every second to show live countdown
+    // ⏰ Update current time every second to show live countdown
     const interval = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(interval);
   }, []);
@@ -32,18 +32,32 @@ export default function UserCodingQuizList() {
   if (loading) return <p className="text-center mt-20 text-lg">Loading coding problems...</p>;
   if (error) return <p className="text-center mt-20 text-red-500">{error}</p>;
 
-  const filteredProblems = problems.filter(p => p.quizType === quizTypeFilter);
+  const filteredProblems = problems.filter((p) => p.quizType === quizTypeFilter);
   const quizTypes = ["Grand Test", "Assignment", "Practice Test"];
 
-  const formatCountdown = (dateStr) => {
-    if (!dateStr) return "0h 0m";
-    const target = new Date(dateStr);
-    const diff = target - now;
-    if (diff <= 0) return "0h 0m";
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    return `${hours}h ${minutes}m`;
+  // ✅ Safe date parser
+  const parseDate = (dateStr) => {
+    if (!dateStr) return null;
+    const d = new Date(dateStr);
+    return isNaN(d.getTime()) ? null : d;
   };
+
+  // ⏳ Countdown formatter
+  // ⏳ Countdown formatter with hours, minutes, seconds
+const formatCountdown = (dateStr) => {
+  const target = parseDate(dateStr);
+  if (!target) return "0h 0m 0s";
+
+  const diff = target - now;
+  if (diff <= 0) return "0h 0m 0s";
+
+  const hours = Math.floor(diff / (1000 * 60 * 60));
+  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+  const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+  return `${hours}h ${minutes}m ${seconds}s`;
+};
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-100 via-pink-100 to-fuchsia-200 py-10 px-4">
@@ -78,7 +92,7 @@ export default function UserCodingQuizList() {
             {filteredProblems.map((problem) => {
               let buttonText = "Attempt Problem";
 
-              // Cooldown / availability logic
+              // ⏳ Availability / Cooldown logic
               if (!problem.canAttempt) {
                 if (problem.availabilityMessage?.startsWith("Available from")) {
                   buttonText = `Available in ${formatCountdown(problem.startTime)}`;
@@ -90,6 +104,9 @@ export default function UserCodingQuizList() {
                   buttonText = "Cannot Attempt Now";
                 }
               }
+
+              const start = parseDate(problem.startTime);
+              const end = parseDate(problem.endTime);
 
               return (
                 <div
@@ -105,10 +122,23 @@ export default function UserCodingQuizList() {
                     {problem.description || "No description provided."}
                   </p>
 
-                  <p className="text-gray-500 text-xs mb-4">
+                  <p className="text-gray-500 text-xs mb-2">
                     Difficulty: <span className="font-medium">{problem.difficulty}</span> |{" "}
                     Test Cases: <span className="font-medium">{problem.testCases?.length || 0}</span>
                   </p>
+
+                  {/* 🔥 Availability Window */}
+                  {start && end && (
+                    <p className="text-gray-600 text-xs mb-4">
+                      Available: {start.toLocaleString()} → {end.toLocaleString()}
+                    </p>
+                  )}
+{/* Countdown (only for timed problems, not Practice Test) */}
+{problem.quizType !== "Practice Test" && end && now < end && (
+  <div className="text-sm font-semibold text-pink-700 mb-3">
+    ⏳ Time Left: {formatCountdown(problem.endTime)}
+  </div>
+)}
 
                   {problem.canAttempt ? (
                     <Link

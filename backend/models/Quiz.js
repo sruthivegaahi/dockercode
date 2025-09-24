@@ -15,12 +15,13 @@ const quizSchema = new mongoose.Schema({
   subcategory: { type: String, enum: ['Basic', 'Medium', 'Advanced'], required: true },
   questions: [questionSchema],
   creator: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  assignedTargets: [
+ assignedTargets: [
   {
     collegeName: String,
-    branch: String,
+    branches: [String], // allow multiple branches
   },
 ],
+
 quizType: { 
       type: String, 
       enum: ['Grand Test', 'Assignment', 'Practice Test'], 

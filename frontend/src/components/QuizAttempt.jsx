@@ -50,7 +50,7 @@ export default function QuizAttempt() {
       try {
         const res = await api.get(`/api/quizzes/${id}`);
         setQuiz(res.data); // always set the quiz
-
+  enterFullScreen();
         // Restore previous answers if available
         let restoredAnswers = res.data.questions.map(q => ({ type: q.type, answer: '' }));
         if (savedAnswers) {
@@ -245,6 +245,19 @@ export default function QuizAttempt() {
     }
     setSubmitting(false);
   };
+// Helper to enter fullscreen
+const enterFullScreen = () => {
+  const el = document.documentElement;
+  if (el.requestFullscreen) {
+    el.requestFullscreen();
+  } else if (el.mozRequestFullScreen) {
+    el.mozRequestFullScreen();
+  } else if (el.webkitRequestFullscreen) {
+    el.webkitRequestFullscreen();
+  } else if (el.msRequestFullscreen) {
+    el.msRequestFullscreen();
+  }
+};
 
   const terminateQuiz = async () => {
     setTerminated(true);
@@ -376,7 +389,7 @@ const wrongAnswers = totalQuestions - correctAnswers - unanswered;
         <div
           style={{
             position: 'fixed',
-            top: '20px',
+            top: '120px',
             right: '20px',
             zIndex: 9999,
             border: '3px solid #a855f7',
@@ -397,65 +410,70 @@ const wrongAnswers = totalQuestions - correctAnswers - unanswered;
       )}
 
       {/* Review Section */}
-      {reviewMode && reviewData.length > 0 && (
-        <div className="mt-10">
-          <h3 className="text-2xl font-bold text-purple-700 mb-4">Review Your Answers</h3>
-          <div className="flex justify-center mb-6">
-            <PieChart width={500} height={300}>
-              <Pie
-                data={chartData}
-                cx="50%"
-                cy="50%"
-                labelLine
-                label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                outerRadius={100}
-                fill="#8884d8"
-                dataKey="value"
-              >
-                {chartData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip />
-              <Legend />
-            </PieChart>
+    {reviewMode && reviewData.length > 0 && (
+  <div className="mt-10">
+    <h3 className="text-2xl font-bold text-purple-700 mb-4">Review Your Answers</h3>
+
+    <div className="flex flex-col lg:flex-row gap-6">
+      {/* Left: Questions */}
+      <div className="flex-1 space-y-4">
+        {reviewData.map((q, idx) => (
+          <div key={idx} className="p-4 border rounded-lg bg-purple-50">
+            <p className="font-semibold text-purple-900 whitespace-pre-line break-words">
+              {idx + 1}. {q.question}
+            </p>
+
+            {q.type === 'mcq' && (
+              <ul className="list-disc ml-6 mt-2">
+                {q.options.map((opt, optIdx) => {
+                  let style = '';
+                  if (optIdx === q.studentAnswer) style = 'text-red-600 font-bold';
+                  if (optIdx === q.correctAnswer) style = 'text-green-600 font-bold';
+                  return <li key={optIdx} className={style}>{opt}</li>;
+                })}
+              </ul>
+            )}
+            {q.type === 'fill_blank' && (
+              <p className="mt-2">
+                Your Answer: <span className={q.isCorrect ? 'text-green-600' : 'text-red-600 font-bold'}>{q.studentAnswer || 'No Answer'}</span><br/>
+                Correct Answer: <span className="text-green-600 font-bold">{q.correctAnswer}</span>
+              </p>
+            )}
           </div>
+        ))}
+      </div>
 
-          {reviewData.map((q, idx) => (
-            <div key={idx} className="mb-6 p-4 border rounded-lg bg-purple-50">
-             <p className="font-semibold text-purple-900 whitespace-pre-line break-words">
-  {idx + 1}. {q.question}
-</p>
-
-              {q.type === 'mcq' && (
-                <ul className="list-disc ml-6 mt-2">
-                  {q.options.map((opt, optIdx) => {
-                    let style = '';
-                    if (optIdx === q.studentAnswer) style = 'text-red-600 font-bold';
-                    if (optIdx === q.correctAnswer) style = 'text-green-600 font-bold';
-                    return <li key={optIdx} className={style}>{opt}</li>;
-                  })}
-                </ul>
-              )}
-              {q.type === 'fill_blank' && (
-                <p>
-                  Your Answer: <span className={q.isCorrect ? 'text-green-600' : 'text-red-600 font-bold'}>{q.studentAnswer || 'No Answer'}</span><br/>
-                  Correct Answer: <span className="text-green-600 font-bold">{q.correctAnswer}</span>
-                </p>
-              )}
-            </div>
-          ))}
-
-          <div className="text-center mt-6">
-            <button
-              onClick={() => navigate('/student/dashboard')}
-              className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg shadow"
-            >
-              Go to Dashboard
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Right: PieChart */}
+      <div className="w-full lg:w-1/3 flex justify-center items-start">
+        <PieChart width={350} height={250}>
+          <Pie
+            data={chartData}
+            cx="50%"
+            cy="50%"
+            outerRadius={80}
+            label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+            dataKey="value"
+          >
+            {chartData.map((entry, index) => (
+              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+            ))}
+          </Pie>
+          <Tooltip />
+          <Legend verticalAlign="bottom" height={36} />
+        </PieChart>
+      </div>
     </div>
-  );
+
+    <div className="text-center mt-6">
+      <button
+        onClick={() => navigate('/student/dashboard')}
+        className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg shadow"
+      >
+        Go to Dashboard
+      </button>
+    </div>
+  </div>
+)}
+</div>
+  )
 }

@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
-import { useParams,useNavigate } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import Editor from "@monaco-editor/react";
+import * as monaco from "monaco-editor";
 import api from "./api";
 
 const boilerplates = {
@@ -28,18 +29,23 @@ int main() {
 };
 
 export default function StudentCodingQuizAttempt() {
-  const { id } = useParams(); // problemId
-  const navigate=useNavigate();
-  // Problem & Code state
+  const { id } = useParams();
+  const navigate = useNavigate();
+
+  // Problem & State
   const [problem, setProblem] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
   const [language, setLanguage] = useState("javascript");
-  const [code, setCode] = useState(boilerplates.javascript);
+
+  // Monaco models for each language
+  const modelsRef = useRef({});
+  const editorRef = useRef(null);
 
   // Attempt state
   const [attemptStarted, setAttemptStarted] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(1800); // 30 min default
+  const [timeLeft, setTimeLeft] = useState(1800);
   const [tabSwitches, setTabSwitches] = useState(0);
   const [cameraStream, setCameraStream] = useState(null);
 
@@ -50,13 +56,12 @@ export default function StudentCodingQuizAttempt() {
   const [score, setScore] = useState(null);
   const [running, setRunning] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false); // ✅ Prevent multiple submissions
+  const [submitted, setSubmitted] = useState(false);
 
-  // Refs for cleanup
+  // Refs
   const timerRef = useRef(null);
   const visibilityHandlerRef = useRef(null);
 
-  // Determine if practice test
   const isPractice = problem?.quizType === "Practice Test";
 
   // Fetch problem
@@ -83,24 +88,23 @@ export default function StudentCodingQuizAttempt() {
     })();
   }, [id]);
 
-  // Cleanup function
+  // Cleanup
   const cleanup = () => {
     if (timerRef.current) clearInterval(timerRef.current);
-    if (visibilityHandlerRef.current)
+    if (visibilityHandlerRef.current) {
       document.removeEventListener("visibilitychange", visibilityHandlerRef.current);
+    }
     if (cameraStream) {
       cameraStream.getTracks().forEach((t) => t.stop());
       setCameraStream(null);
     }
   };
 
-  // Start attempt
+  // Start Attempt
   const startAttempt = async () => {
     setAttemptStarted(true);
+    if (isPractice) return;
 
-    if (isPractice) return; // skip all proctoring features for practice test
-
-    // Timer
     timerRef.current = setInterval(() => {
       setTimeLeft((t) => {
         if (t <= 1) {
@@ -112,7 +116,6 @@ export default function StudentCodingQuizAttempt() {
       });
     }, 1000);
 
-    // Tab switch
     visibilityHandlerRef.current = () => {
       if (document.hidden) {
         setTabSwitches((c) => {
@@ -126,7 +129,6 @@ export default function StudentCodingQuizAttempt() {
     };
     document.addEventListener("visibilitychange", visibilityHandlerRef.current);
 
-    // Camera
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true });
       setCameraStream(stream);
@@ -135,20 +137,24 @@ export default function StudentCodingQuizAttempt() {
     }
   };
 
-  // Language change
+  // Handle language change → swap model
   const handleLanguageChange = (e) => {
     const selected = e.target.value;
     setLanguage(selected);
-    setCode(boilerplates[selected] || "");
+
+    if (editorRef.current && modelsRef.current[selected]) {
+      editorRef.current.setModel(modelsRef.current[selected]);
+    }
   };
 
-  // Run visible test cases
+  // Run code
   const handleRunCode = async () => {
     if (!problem) return;
     setRunning(true);
     setResults([]);
     setCustomOutput(null);
     try {
+      const code = editorRef.current?.getValue() || "";
       const payload = { code, language, testCases: problem.testCases.filter((tc) => !tc.isHidden) };
       const res = await api.post("/api/problems/run", payload);
 
@@ -156,8 +162,7 @@ export default function StudentCodingQuizAttempt() {
         (res.data.results || []).map((r) => ({
           input: r.input ?? "",
           expected: r.expected ?? r.expectedOutput ?? "",
-        actual: r.output ?? r.stdout ?? "",
-
+          actual: r.output ?? r.stdout ?? "",
           status: r.status ?? (r.error ? "error" : "fail"),
           error: r.error ?? null,
         }))
@@ -170,12 +175,13 @@ export default function StudentCodingQuizAttempt() {
     }
   };
 
-  // Run with custom input
+  // Custom input run
   const handleRunWithInput = async () => {
     if (!customInput.trim()) return alert("Enter custom input first.");
     setRunning(true);
     setCustomOutput(null);
     try {
+      const code = editorRef.current?.getValue() || "";
       const payload = { code, language, customInput };
       const res = await api.post("/api/problems/run-custom", payload);
       const out = res.data.output || res.data.error || "No output";
@@ -188,47 +194,42 @@ export default function StudentCodingQuizAttempt() {
     }
   };
 
-  // Submit code
-  // Submit code
-const handleSubmit = async (auto = false) => {
-  if (!problem || (submitted && !isPractice)) return; // ✅ allow multiple for practice
-  setSubmitting(true);
-  try {
-    const payload = { problemId: problem._id, code, language };
-    const res = await api.post("/api/problems/submit", payload);
+  // Submit
+  const handleSubmit = async (auto = false) => {
+    if (!problem || (submitted && !isPractice)) return;
+    setSubmitting(true);
+    try {
+      const code = editorRef.current?.getValue() || "";
+      const payload = { problemId: problem._id, code, language };
+      const res = await api.post("/api/problems/submit", payload);
 
-    // Normalize results
-    const resResults = res.data.results || [];
-    setResults(
-      resResults.map((r) => ({
-        input: r.input ?? "",
-        expected: r.expected ?? r.expectedOutput ?? "",
-actual: r.output ?? r.stdout ?? "", // read from backend's actual output
+      const resResults = res.data.results || [];
+      setResults(
+        resResults.map((r) => ({
+          input: r.input ?? "",
+          expected: r.expected ?? r.expectedOutput ?? "",
+          actual: r.output ?? r.stdout ?? "",
+          status: r.status ?? (r.error ? "error" : "fail"),
+          error: r.error ?? null,
+        }))
+      );
 
-        
-        status: r.status ?? (r.error ? "error" : "fail"),
-        error: r.error ?? null,
-      }))
-    );
+      setScore(res.data.score ?? null);
+      alert(auto ? "⏳ Auto-submitted!" : "✅ Submitted!");
 
-    setScore(res.data.score ?? null);
-    alert(auto ? "⏳ Auto-submitted!" : "✅ Submitted!");
+      if (!isPractice) setSubmitted(true);
+      cleanup();
+    } catch (err) {
+      console.error("❌ Submission failed:", err.response?.data || err.message);
+      alert("❌ Submission failed.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
-    if (!isPractice) setSubmitted(true); // ✅ only lock for non-practice
-    cleanup(); // stop timer + camera
-  } catch (err) {
-    console.error("❌ Submission failed:", err.response?.data || err.message);
-    alert("❌ Submission failed.");
-  } finally {
-    setSubmitting(false);
-  }
-};
-
-
-  // Stop everything if component unmounts
   useEffect(() => cleanup, []);
 
-  // Disable navigation & refresh during attempt (only if not practice test)
+  // Disable navigation during attempt
   useEffect(() => {
     if (!attemptStarted || isPractice) return;
 
@@ -261,7 +262,7 @@ actual: r.output ?? r.stdout ?? "", // read from backend's actual output
     };
   }, [attemptStarted, isPractice]);
 
-  // Format timer mm:ss
+  // Timer format
   const formatTime = (s) => {
     const m = Math.floor(s / 60).toString().padStart(2, "0");
     const sec = (s % 60).toString().padStart(2, "0");
@@ -272,7 +273,6 @@ actual: r.output ?? r.stdout ?? "", // read from backend's actual output
   if (error) return <p className="text-center mt-20 text-red-500">{error}</p>;
   if (!problem) return <p className="text-center mt-20">No problem found.</p>;
 
-  // Before start
   if (!attemptStarted) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100">
@@ -313,7 +313,6 @@ actual: r.output ?? r.stdout ?? "", // read from backend's actual output
 
       {/* Right: Editor */}
       <div className="w-full lg:w-1/2 p-6 flex flex-col relative">
-        {/* Timer & Tab Switch (only if not practice test) */}
         {!isPractice && (
           <div className="flex justify-between items-center mb-3">
             <span className="text-lg font-semibold">⏳ {formatTime(timeLeft)}</span>
@@ -321,7 +320,6 @@ actual: r.output ?? r.stdout ?? "", // read from backend's actual output
           </div>
         )}
 
-        {/* Camera */}
         {!isPractice && cameraStream && (
           <div
             className="fixed bottom-4 right-4 w-40 h-28 border-2 border-purple-600 rounded-lg shadow cursor-move bg-black"
@@ -337,7 +335,6 @@ actual: r.output ?? r.stdout ?? "", // read from backend's actual output
           </div>
         )}
 
-        {/* Language + Editor */}
         <div className="flex justify-between mb-3">
           <h3 className="text-lg font-semibold">Write Your Code</h3>
           <select
@@ -351,44 +348,51 @@ actual: r.output ?? r.stdout ?? "", // read from backend's actual output
             <option value="java">Java</option>
           </select>
         </div>
-<Editor
-  height="420px"
-  theme="vs-dark"
-  language={language === "cpp" ? "cpp" : language}
-  value={code}
-  onChange={(val) => setCode(val || "")}
-  onMount={(editor) => {
-    // Disable right-click menu
-    editor.onContextMenu((e) => e.event.preventDefault());
 
-    // Disable copy/cut/paste
-    editor.onKeyDown((e) => {
-      if (
-        (e.ctrlKey || e.metaKey) &&
-        ["c", "x", "v"].includes(e.browserEvent.key.toLowerCase())
-      ) {
-        e.preventDefault();
-      }
-    });
+        <Editor
+          height="420px"
+          theme="vs-dark"
+          language={language === "cpp" ? "cpp" : language}
+          onMount={(editor, monacoInstance) => {
+            editorRef.current = editor;
 
-    // Disable mouse paste via middle-click
-    editor.onMouseDown((e) => {
-      if (e.event.middleButton) {
-        e.event.preventDefault();
-      }
-    });
-  }}
-  options={{
-    fontSize: 14,
-    minimap: { enabled: false },
-    wordWrap: "on",
-    automaticLayout: true,
-    contextmenu: false, // disable built-in context menu
-  }}
-  className="rounded border border-gray-300"
-/>
+            // Create a model per language if not already
+            Object.keys(boilerplates).forEach((lang) => {
+              if (!modelsRef.current[lang]) {
+                modelsRef.current[lang] = monacoInstance.editor.createModel(
+                  boilerplates[lang],
+                  lang === "cpp" ? "cpp" : lang
+                );
+              }
+            });
 
-        {/* Buttons */}
+            // Set initial model
+            editor.setModel(modelsRef.current[language]);
+
+            // Disable right-click, copy, paste
+            editor.onContextMenu((e) => e.event.preventDefault());
+            editor.onKeyDown((e) => {
+              if (
+                (e.ctrlKey || e.metaKey) &&
+                ["c", "x", "v"].includes(e.browserEvent.key.toLowerCase())
+              ) {
+                e.preventDefault();
+              }
+            });
+            editor.onMouseDown((e) => {
+              if (e.event.middleButton) e.event.preventDefault();
+            });
+          }}
+          options={{
+            fontSize: 14,
+            minimap: { enabled: false },
+            wordWrap: "on",
+            automaticLayout: true,
+            contextmenu: false,
+          }}
+          className="rounded border border-gray-300"
+        />
+
         <div className="flex gap-3 mt-4">
           <button
             onClick={handleRunCode}
@@ -397,21 +401,19 @@ actual: r.output ?? r.stdout ?? "", // read from backend's actual output
           >
             {running ? "Running..." : "Run Code"}
           </button>
-         <button
-  onClick={() => handleSubmit(false)}
-  disabled={submitting || (submitted && !isPractice)} // ✅ allow multiple submits for practice
-  className={`px-4 py-2 rounded-lg shadow text-white ${
-    submitted && !isPractice
-      ? "bg-gray-400 cursor-not-allowed"
-      : "bg-blue-600 hover:bg-blue-700"
-  }`}
->
-  {submitted && !isPractice ? "Submitted" : submitting ? "Submitting..." : "Submit"}
-</button>
-
+          <button
+            onClick={() => handleSubmit(false)}
+            disabled={submitting || (submitted && !isPractice)}
+            className={`px-4 py-2 rounded-lg shadow text-white ${
+              submitted && !isPractice
+                ? "bg-gray-400 cursor-not-allowed"
+                : "bg-blue-600 hover:bg-blue-700"
+            }`}
+          >
+            {submitted && !isPractice ? "Submitted" : submitting ? "Submitting..." : "Submit"}
+          </button>
         </div>
 
-        {/* Custom Input */}
         <div className="mt-6">
           <h4 className="font-semibold mb-2">Custom Input:</h4>
           <textarea
@@ -436,7 +438,6 @@ actual: r.output ?? r.stdout ?? "", // read from backend's actual output
           )}
         </div>
 
-        {/* Results */}
         <div className="mt-6">
           <h4 className="font-semibold mb-2">Results:</h4>
           {score !== null && (
@@ -449,10 +450,7 @@ actual: r.output ?? r.stdout ?? "", // read from backend's actual output
           ) : (
             <ul className="space-y-2">
               {results.map((r, i) => (
-                <li
-                  key={i}
-                  className="p-3 border rounded bg-white shadow-sm text-sm"
-                >
+                <li key={i} className="p-3 border rounded bg-white shadow-sm text-sm">
                   {r.error ? (
                     <span className="text-red-500">❌ {r.error}</span>
                   ) : (
@@ -479,20 +477,18 @@ actual: r.output ?? r.stdout ?? "", // read from backend's actual output
               ))}
             </ul>
           )}
-          
         </div>
-        {/* Go to Dashboard button */}
-{submitted && (
-  <div className="text-center mt-6">
-    <button
-      onClick={() => navigate("/student/dashboard")}
-      className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg shadow"
-    >
-      Go to Dashboard
-    </button>
-  </div>
-)}
 
+        {submitted && (
+          <div className="text-center mt-6">
+            <button
+              onClick={() => navigate("/student/dashboard")}
+              className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg shadow"
+            >
+              Go to Dashboard
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

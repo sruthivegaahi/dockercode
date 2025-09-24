@@ -101,6 +101,10 @@ router.put("/:id", async (req, res) => {
     const { id } = req.params;
     const updateData = req.body;
 
+    // Convert startTime/endTime to Date if they exist
+    if (updateData.startTime) updateData.startTime = new Date(updateData.startTime);
+    if (updateData.endTime) updateData.endTime = new Date(updateData.endTime);
+
     const problem = await Problem.findByIdAndUpdate(id, updateData, {
       new: true,
       runValidators: true,
@@ -118,56 +122,102 @@ router.put("/:id", async (req, res) => {
 // Assign Problem to College/Branch
 // Assign Problem to College/Branch
 // Assign Problem to College/Branch
+// Create Coding Quiz with multiple coding questions
+router.post(
+  "/quizzes/coding",
+  authenticateToken,
+  authorizeRoles("admin"),
+  async (req, res) => {
+    try {
+      const { title, description, questions } = req.body;
+
+      if (!title || !Array.isArray(questions) || questions.length === 0) {
+        return res.status(400).json({ message: "Title and at least one coding question are required" });
+      }
+
+      // validate questions
+      const formattedQuestions = questions.map((q) => {
+        if (!q.codingProblem) {
+          throw new Error("Each coding question must include codingProblem ID");
+        }
+        return {
+          type: "coding",
+          codingProblem: q.codingProblem
+        };
+      });
+
+      const quiz = new Quiz({
+        title,
+        description,
+        questions: formattedQuestions,
+        creator: req.user.userId
+      });
+
+      await quiz.save();
+
+      res.status(201).json({ message: "Coding quiz created successfully", quiz });
+    } catch (err) {
+      console.error("❌ Error creating coding quiz:", err);
+      res.status(500).json({ message: "Server error", error: err.message });
+    }
+  }
+);
+
+
 router.post(
   "/assign",
   authenticateToken,
   authorizeRoles("admin"), // only admins can assign
   async (req, res) => {
     try {
-      let { id, quizId, collegeName, branch } = req.body;
+      let { id, quizId, collegeName, branches } = req.body; // 🔥 now expects `branches` (array)
       const targetId = id || quizId; // accept either key
 
-      if (!targetId || !collegeName || !branch) {
+      if (!targetId || !collegeName || !Array.isArray(branches) || branches.length === 0) {
         return res.status(400).json({ error: "Missing required fields" });
       }
 
       collegeName = collegeName.trim();
-      branch = branch.trim();
 
-      const problem = await Problem.findById(targetId);
-      if (!problem) {
-        return res.status(404).json({ error: "Problem not found" });
+      // Find either Problem or Quiz
+      let targetDoc = await Problem.findById(targetId);
+      if (!targetDoc) {
+        targetDoc = await Quiz.findById(targetId);
       }
 
-      if (!problem.assignedTargets) problem.assignedTargets = [];
-
-      const alreadyAssigned = problem.assignedTargets.some(
-        ({ collegeName: c, branch: b }) =>
-          (c || "").trim().toLowerCase() === collegeName.toLowerCase() &&
-          (b || "").trim().toLowerCase() === branch.toLowerCase()
-      );
-
-      if (alreadyAssigned) {
-        return res.status(200).json({
-          message: "Already assigned",
-          assignedTargets: problem.assignedTargets,
-        });
+      if (!targetDoc) {
+        return res.status(404).json({ error: "Target (Problem/Quiz) not found" });
       }
 
-      problem.assignedTargets.push({ collegeName, branch });
-      await problem.save();
+      if (!targetDoc.assignedTargets) targetDoc.assignedTargets = [];
+
+      // Loop through all branches
+      branches.forEach((branch) => {
+        branch = branch.trim();
+
+        const alreadyAssigned = targetDoc.assignedTargets.some(
+          ({ collegeName: c, branch: b }) =>
+            (c || "").trim().toLowerCase() === collegeName.toLowerCase() &&
+            (b || "").trim().toLowerCase() === branch.toLowerCase()
+        );
+
+        if (!alreadyAssigned) {
+          targetDoc.assignedTargets.push({ collegeName, branch });
+        }
+      });
+
+      await targetDoc.save();
 
       res.status(201).json({
-        message: "Problem assigned successfully",
-        assignedTargets: problem.assignedTargets,
+        message: "Assigned successfully",
+        assignedTargets: targetDoc.assignedTargets,
       });
     } catch (err) {
-      console.error("❌ Error assigning problem:", err);
+      console.error("❌ Error assigning:", err);
       res.status(500).json({ error: err.message });
     }
   }
 );
-
 
 // Get All Coding Quizzes
 router.get("/quizzes/coding", authenticateToken, async (req, res) => {

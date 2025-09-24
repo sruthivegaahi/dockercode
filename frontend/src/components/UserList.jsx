@@ -12,6 +12,9 @@ const UserList = () => {
   // Search state
   const [searchTerm, setSearchTerm] = useState('');
 
+  // 🔹 New state: limit by number of users
+  const [userLimit, setUserLimit] = useState('');
+
   useEffect(() => {
     const fetchUsers = async () => {
       try {
@@ -52,11 +55,17 @@ const UserList = () => {
     );
   });
 
-  // Pagination logic
-  const totalPages = Math.ceil(filteredUsers.length / usersPerPage);
+  // 🔹 Apply limit (if entered)
+  const limitedUsers =
+    userLimit && !isNaN(userLimit) && userLimit > 0
+      ? filteredUsers.slice(0, Number(userLimit))
+      : filteredUsers;
+
+  // Pagination logic (only applies if no limit entered)
+  const totalPages = Math.ceil(limitedUsers.length / usersPerPage);
   const indexOfLastUser = currentPage * usersPerPage;
   const indexOfFirstUser = indexOfLastUser - usersPerPage;
-  const currentUsers = filteredUsers.slice(indexOfFirstUser, indexOfLastUser);
+  const currentUsers = limitedUsers.slice(indexOfFirstUser, indexOfLastUser);
 
   const handlePageChange = (pageNumber) => {
     if (pageNumber >= 1 && pageNumber <= totalPages) {
@@ -79,17 +88,27 @@ const UserList = () => {
           📋 User Management
         </h2>
 
-        {/* Search */}
-        <div className="mb-6 flex justify-center">
+        {/* Search & Limit Filter */}
+        <div className="mb-6 flex flex-col md:flex-row justify-center gap-4">
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => {
               setSearchTerm(e.target.value);
-              setCurrentPage(1); // reset to first page on search
+              setCurrentPage(1);
             }}
             placeholder="Search by name, email, college, branch, role, gender..."
-            className="w-full max-w-md px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-400 shadow-sm text-gray-700"
+            className="w-full md:w-1/2 px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-400 shadow-sm text-gray-700"
+          />
+          <input
+            type="number"
+            value={userLimit}
+            onChange={(e) => {
+              setUserLimit(e.target.value);
+              setCurrentPage(1);
+            }}
+            placeholder="Enter number of users (e.g. 10)"
+            className="w-full md:w-1/4 px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-400 shadow-sm text-gray-700"
           />
         </div>
 
@@ -150,36 +169,38 @@ const UserList = () => {
           </table>
         </div>
 
-        {/* Pagination */}
-        <div className="mt-6 flex justify-center items-center space-x-2 text-sm">
-          <button
-            onClick={() => handlePageChange(currentPage - 1)}
-            disabled={currentPage === 1}
-            className="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300 disabled:opacity-50"
-          >
-            Prev
-          </button>
-          {Array.from({ length: totalPages }, (_, i) => (
+        {/* Pagination (hidden if limit applied) */}
+        {(!userLimit || userLimit <= 0) && (
+          <div className="mt-6 flex justify-center items-center space-x-2 text-sm">
             <button
-              key={i + 1}
-              onClick={() => handlePageChange(i + 1)}
-              className={`px-3 py-1 rounded ${
-                currentPage === i + 1
-                  ? 'bg-indigo-500 text-white'
-                  : 'bg-gray-200 hover:bg-gray-300'
-              }`}
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage === 1}
+              className="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300 disabled:opacity-50"
             >
-              {i + 1}
+              Prev
             </button>
-          ))}
-          <button
-            onClick={() => handlePageChange(currentPage + 1)}
-            disabled={currentPage === totalPages}
-            className="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300 disabled:opacity-50"
-          >
-            Next
-          </button>
-        </div>
+            {Array.from({ length: totalPages }, (_, i) => (
+              <button
+                key={i + 1}
+                onClick={() => handlePageChange(i + 1)}
+                className={`px-3 py-1 rounded ${
+                  currentPage === i + 1
+                    ? 'bg-indigo-500 text-white'
+                    : 'bg-gray-200 hover:bg-gray-300'
+                }`}
+              >
+                {i + 1}
+              </button>
+            ))}
+            <button
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              className="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300 disabled:opacity-50"
+            >
+              Next
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -43,48 +43,65 @@ router.get('/distinct', async (req, res) => {
 router.post(
   '/assign',
   authenticateToken,
-  authorizeRoles('admin'), // ✅ Use middleware instead of manual role check
+  authorizeRoles('admin'),
   async (req, res) => {
     try {
-      let { quizId, collegeName, branch } = req.body;
+      let { quizId, collegeName, branches } = req.body;
 
-      if (!quizId || !collegeName || !branch) {
-        return res.status(400).json({ message: 'Missing required fields' });
+      if (!quizId || !collegeName || !branches || !Array.isArray(branches) || branches.length === 0) {
+        return res.status(400).json({ message: 'Missing required fields or branches array is empty' });
       }
 
-      collegeName = collegeName.trim();
-      branch = branch.trim();
+      const normalize = (str) => str.trim().replace(/\s+/g, ' ');
+      collegeName = normalize(collegeName);
+      branches = branches.map(normalize);
 
       const quiz = await Quiz.findById(quizId);
       if (!quiz) return res.status(404).json({ message: 'Quiz not found' });
 
-      // Check if already assigned
-      const alreadyAssigned = quiz.assignedTargets.some(
-        (target) =>
-          (target.collegeName || '').trim().toLowerCase() === collegeName.toLowerCase() &&
-          (target.branch || '').trim().toLowerCase() === branch.toLowerCase()
+      let target = quiz.assignedTargets.find(
+        (t) => t.collegeName.toLowerCase() === collegeName.toLowerCase()
       );
 
-      if (alreadyAssigned) {
+      let added = false;
+
+      if (!target) {
+        // If college not found, push new object
+        quiz.assignedTargets.push({ collegeName, branches });
+        added = true;
+      } else {
+        // Merge new branches with existing, avoiding duplicates
+        const existingBranches = new Set(target.branches.map((b) => b.toLowerCase()));
+        branches.forEach((b) => {
+          if (!existingBranches.has(b.toLowerCase())) {
+            target.branches.push(b);
+            added = true;
+          }
+        });
+      }
+
+      if (!added) {
         return res.status(200).json({
-          message: 'Quiz already assigned to this college/branch',
+          message: `Already assigned`,
           assignedTargets: quiz.assignedTargets,
         });
       }
 
-      quiz.assignedTargets.push({ collegeName, branch });
       await quiz.save();
 
       res.status(201).json({
-        message: 'Quiz assigned successfully',
+        message: `Branches assigned successfully`,
         assignedTargets: quiz.assignedTargets,
       });
     } catch (err) {
       console.error('Error assigning quiz:', err);
-      res.status(500).json({ message: 'Server error' });
+      res.status(500).json({ message: 'Server error', error: err.message });
     }
   }
 );
+
+
+
 
 
 router.get('/', async (req, res) => {
@@ -242,7 +259,6 @@ router.post('/', authenticateToken, async (req, res) => {
 
 
 
-
 router.put('/:id', authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin') {
     return res.status(403).json({ message: 'Forbidden' });
@@ -254,11 +270,16 @@ router.put('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ message: 'Quiz not found' });
     }
 
-    const { title, questions, category, subcategory } = req.body;
+    // ✅ Include startTime and endTime here
+    const { title, questions, category, subcategory, startTime, endTime } = req.body;
 
     if (title !== undefined) quiz.title = title;
     if (category !== undefined) quiz.category = category;
     if (subcategory !== undefined) quiz.subcategory = subcategory;
+
+    // ✅ Update times if provided
+    if (startTime !== undefined) quiz.startTime = new Date(startTime);
+    if (endTime !== undefined) quiz.endTime = new Date(endTime);
 
     if (questions !== undefined) {
       if (!Array.isArray(questions)) {
@@ -277,6 +298,8 @@ router.put('/:id', authenticateToken, async (req, res) => {
           if (typeof q.correctAnswer !== 'string') {
             return res.status(400).json({ message: 'Invalid Fill-in-the-Blank format' });
           }
+        } else if (q.type === 'coding') {
+          // allow coding
         } else {
           return res.status(400).json({ message: 'Unsupported question type' });
         }
@@ -292,6 +315,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     res.status(500).json({ message: 'Failed to update quiz', error: err.message });
   }
 });
+
 
 router.delete('/:id', authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ message: 'Forbidden' });
@@ -654,11 +678,12 @@ router.get(
         return res.status(400).json({ message: "Incomplete student profile." });
       }
 
+      // ✅ FIX: Use "branches" with $in instead of "branch"
       const quizzes = await Quiz.find({
         assignedTargets: {
           $elemMatch: {
             collegeName: { $regex: normalizedCollege, $options: "i" },
-            branch: { $regex: normalizedBranch, $options: "i" },
+            branches: { $in: [normalizedBranch] }, // ✅ check if student's branch is in the array
           },
         },
       }).lean();
@@ -676,7 +701,10 @@ router.get(
           status = "alreadyAttempted";
         }
 
-        if ((quiz.quizType === "Grand Test" || quiz.quizType === "Assignment") && quiz.endTime) {
+        if (
+          (quiz.quizType === "Grand Test" || quiz.quizType === "Assignment") &&
+          quiz.endTime
+        ) {
           if (now > new Date(quiz.endTime)) {
             canAttempt = false;
             status = "expired";

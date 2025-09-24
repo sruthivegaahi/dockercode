@@ -11,12 +11,13 @@ const problemSchema = new mongoose.Schema({
   description: { type: String, required: true },
   difficulty: { type: String, enum: ["Easy", "Medium", "Hard"], default: "Easy" },
   testCases: [testCaseSchema],
-   assignedTargets: [
-    {
-      collegeName: { type: String, required: true },
-      branch: { type: String, required: true },
-    },
-  ],
+    assignedTargets: [
+  {
+    collegeName: String,
+    branch: String, // allow multiple branches
+  },
+],
+
     // 🔥 New field to support same quiz types as Quiz
 quizType: { 
       type: String, 
